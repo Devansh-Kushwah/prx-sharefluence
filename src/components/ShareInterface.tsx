@@ -28,43 +28,62 @@ interface ShareInterfaceProps {
 export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother }: ShareInterfaceProps) {
   const [referralCode] = useState(`PRX${Math.random().toString(36).substr(2, 6).toUpperCase()}`);
   const [isSharing, setIsSharing] = useState(false);
+  const [customMessage, setCustomMessage] = useState('Just saved ₹200 on my monthly medicines with @PlatinumRx! 💊💰 Check out my unboxing experience and use my referral code for exclusive discounts. #PlatinumRx #HealthcareSavings #MoneySaver');
+  const [hashtags, setHashtags] = useState('#PlatinumRx #HealthcareSavings #MedicineDelivery');
+
+  // Create share URL and message
+  const shareUrl = videoUrl || 'https://platinumrx.com';
+  const shareMessage = `${customMessage}\n\nReferral Code: ${referralCode}\n\n${hashtags}`;
 
   const socialPlatforms = [
     {
-      name: 'WhatsApp',
+      name: 'WhatsApp Video',
       icon: '📱',
       color: 'bg-green-500',
-      description: 'Share with family & friends'
+      description: 'Share video file to WhatsApp',
+      shareType: 'whatsapp-video'
     },
     {
-      name: 'Instagram',
+      name: 'Instagram Stories',
       icon: '📷',
       color: 'bg-gradient-to-r from-purple-500 to-pink-500',
-      description: 'Post to your story or feed'
+      description: 'Post to Instagram Stories',
+      shareType: 'instagram'
     },
     {
       name: 'Facebook',
       icon: '👥',
       color: 'bg-blue-600',
-      description: 'Share with your network'
+      description: 'Share to Facebook',
+      shareType: 'facebook'
     },
     {
       name: 'Twitter',
       icon: '🐦',
       color: 'bg-blue-400',
-      description: 'Tweet to your followers'
+      description: 'Tweet video',
+      shareType: 'twitter'
     },
     {
       name: 'YouTube Shorts',
       icon: '🎬',
       color: 'bg-red-600',
-      description: 'Upload as a short video'
+      description: 'Upload as Short',
+      shareType: 'youtube'
     },
     {
       name: 'LinkedIn',
       icon: '💼',
       color: 'bg-blue-700',
-      description: 'Professional network'
+      description: 'Professional share',
+      shareType: 'linkedin'
+    },
+    {
+      name: 'All Platforms',
+      icon: '⋯',
+      color: 'bg-gray-500',
+      description: 'Native sharing (WhatsApp, etc.)',
+      shareType: 'native'
     }
   ];
 
@@ -97,14 +116,151 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
     }
   };
 
-  const handleShare = (platform: string) => {
+  const handleShare = async (platform: string, shareType: string) => {
+    if (!videoFile) {
+      toast.error('No video available to share');
+      return;
+    }
+
     setIsSharing(true);
-    
-    // Simulate sharing process
-    setTimeout(() => {
+
+    try {
+      if (shareType === 'whatsapp-video') {
+        // Special handling for WhatsApp video sharing
+        await handleWhatsAppVideoShare();
+      } else if (shareType === 'native') {
+        // Use native Web Share API (works on mobile for WhatsApp, etc.)
+        await handleNativeShare();
+      } else {
+        // Handle specific platform sharing
+        await handlePlatformShare(shareType);
+      }
+    } catch (error) {
+      console.error('Sharing failed:', error);
+      toast.error('Sharing failed. Please try again.');
+    } finally {
       setIsSharing(false);
-      toast.success(`Video shared to ${platform}! Your earnings have been credited.`);
-    }, 2000);
+    }
+  };
+
+  const handleWhatsAppVideoShare = async () => {
+    // Try native sharing first (best for mobile)
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [videoFile] })) {
+      try {
+        const shareData = {
+          title: 'PlatinumRx Unboxing Video',
+          text: shareMessage,
+          files: [videoFile]
+        };
+        
+        console.log('Sharing video to WhatsApp via native API:', shareData);
+        await navigator.share(shareData);
+        toast.success('Video shared to WhatsApp successfully!');
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Native WhatsApp sharing failed:', error);
+          // Fallback to download method
+          await handleAlternativeSharing();
+        }
+      }
+    } else {
+      // Fallback: download video and guide user to share manually
+      await handleAlternativeSharing();
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (navigator.share && navigator.canShare) {
+      try {
+        // Create a File object that can be shared
+        const shareData: any = {
+          title: 'PlatinumRx Unboxing Video',
+          text: shareMessage
+        };
+
+        // Always try to share the video file first
+        if (videoFile && navigator.canShare({ files: [videoFile] })) {
+          shareData.files = [videoFile];
+          console.log('Sharing video file:', videoFile.name, 'Size:', videoFile.size);
+          
+          // Remove URL when sharing files to avoid conflicts
+          delete shareData.url;
+        } else if (videoUrl) {
+          // Fallback to URL if file sharing not supported
+          shareData.url = videoUrl;
+          console.log('File sharing not supported, sharing URL instead');
+        }
+
+        console.log('Share data:', shareData);
+        await navigator.share(shareData);
+        toast.success('Video shared successfully!');
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Native sharing failed:', error);
+          // Try alternative sharing methods
+          await handleAlternativeSharing();
+        }
+      }
+    } else {
+      // Fallback for desktop - try alternative methods
+      await handleAlternativeSharing();
+    }
+  };
+
+  const handleAlternativeSharing = async () => {
+    // Try to create a downloadable link for the video
+    if (videoFile) {
+      try {
+        // Create a blob URL for the video file
+        const blobUrl = URL.createObjectURL(videoFile);
+        
+        // Create a temporary download link
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `platinumrx-${videoFile.name}`;
+        link.style.display = 'none';
+        
+        // Add to DOM and trigger download
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up blob URL
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        
+        toast.success('Video downloaded! You can now share it manually to WhatsApp.');
+        toast.info('Tip: Open WhatsApp → Tap + → Document → Select the downloaded video');
+      } catch (error) {
+        console.error('Alternative sharing failed:', error);
+        handleFallbackShare();
+      }
+    } else {
+      handleFallbackShare();
+    }
+  };
+
+  const handlePlatformShare = async (platform: string) => {
+    const platformUrls: { [key: string]: string } = {
+      instagram: 'https://www.instagram.com/stories/',
+      facebook: 'https://www.facebook.com/sharer/sharer.php',
+      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}`,
+      youtube: 'https://www.youtube.com/shorts/upload',
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`
+    };
+
+    const url = platformUrls[platform];
+    if (url) {
+      // Open platform in new tab
+      window.open(url, '_blank');
+      toast.success(`Opened ${platform} for sharing!`);
+    }
+  };
+
+  const handleFallbackShare = () => {
+    // Create a temporary share button that copies everything to clipboard
+    const shareText = `Title: PlatinumRx Unboxing Video\n\nMessage: ${shareMessage}\n\nVideo: ${videoUrl}\n\nReferral Code: ${referralCode}`;
+    navigator.clipboard.writeText(shareText);
+    toast.success('Share details copied to clipboard! You can paste this anywhere.');
   };
 
   return (
@@ -275,7 +431,7 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
               <Card 
                 key={platform.name}
                 className="cursor-pointer hover:shadow-soft transition-all hover:scale-105"
-                onClick={() => handleShare(platform.name)}
+                onClick={() => handleShare(platform.name, platform.shareType)}
               >
                 <CardContent className="p-4 text-center">
                   <div className={`w-12 h-12 ${platform.color} rounded-full flex items-center justify-center mx-auto mb-3 text-white text-xl`}>
@@ -291,8 +447,17 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
                     className="mt-3 w-full"
                     disabled={isSharing}
                   >
-                    <ExternalLink className="w-3 h-3 mr-2" />
-                    Share
+                    {isSharing ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2" />
+                        Sharing...
+                      </>
+                    ) : (
+                      <>
+                        <Share2 className="w-3 h-3 mr-2" />
+                        Share
+                      </>
+                    )}
                   </Button>
                 </CardContent>
               </Card>
@@ -313,13 +478,15 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
           <Textarea 
             placeholder="Just saved big on my medicines with PlatinumRx! Check out my unboxing video and save money too with my referral code..."
             className="min-h-[100px]"
-            defaultValue="Just saved ₹200 on my monthly medicines with @PlatinumRx! 💊💰 Check out my unboxing experience and use my referral code for exclusive discounts. #PlatinumRx #HealthcareSavings #MoneySaver"
+            value={customMessage}
+            onChange={(e) => setCustomMessage(e.target.value)}
           />
           
           <div className="flex items-center space-x-4">
             <Input 
               placeholder="Add hashtags..."
-              defaultValue="#PlatinumRx #HealthcareSavings #MedicineDelivery"
+              value={hashtags}
+              onChange={(e) => setHashtags(e.target.value)}
             />
             <Button variant="outline">
               Add Hashtags

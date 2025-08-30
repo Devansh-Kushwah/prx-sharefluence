@@ -5,17 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { 
   Upload, 
-  Video, 
-  Camera, 
+  Video,  
   Smartphone, 
   Share2, 
   Coins, 
   Gift, 
-  Play,
-  CheckCircle,
-  Clock,
   Sparkles,
-  Users,
   TrendingUp
 } from 'lucide-react';
 import { VideoUpload } from './VideoUpload';
