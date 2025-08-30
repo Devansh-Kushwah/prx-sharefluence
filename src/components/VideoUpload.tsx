@@ -10,7 +10,9 @@ interface VideoUploadProps {
 export function VideoUpload({ onVideoUpload }: VideoUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [conversionProgress, setConversionProgress] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -75,8 +77,30 @@ export function VideoUpload({ onVideoUpload }: VideoUploadProps) {
         videoRef.current.srcObject = stream;
       }
 
+      // Try to use MP4 format first, fallback to WebM if not supported
+      let mimeType = 'video/mp4';
+      let fileExtension = '.mp4';
+      
+      // Check if MP4 is supported
+      if (!MediaRecorder.isTypeSupported('video/mp4')) {
+        // Try other MP4 variants
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
+          mimeType = 'video/mp4;codecs=h264';
+        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+          mimeType = 'video/webm';
+          fileExtension = '.webm';
+        } else {
+          // Fallback to any supported format
+          mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4';
+          fileExtension = mimeType.includes('webm') ? '.webm' : '.mp4';
+        }
+      }
+
+      console.log('Using recording format:', mimeType);
+
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm'
+        mimeType: mimeType,
+        videoBitsPerSecond: 5000000 // 5 Mbps for good quality
       });
 
       mediaRecorderRef.current = mediaRecorder;
@@ -89,8 +113,18 @@ export function VideoUpload({ onVideoUpload }: VideoUploadProps) {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        setRecordedBlob(blob);
+        const blob = new Blob(chunks, { type: mimeType });
+        
+        // Convert to MP4 if not already MP4
+        if (mimeType !== 'video/mp4' && mimeType !== 'video/mp4;codecs=h264') {
+          convertToMP4(blob, mimeType);
+        } else {
+          // Already MP4, create file directly
+          const fileName = `platinumrx-video-${Date.now()}${fileExtension}`;
+          const file = new File([blob], fileName, { type: mimeType });
+          setRecordedBlob(blob);
+          onVideoUpload(file);
+        }
         
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -99,8 +133,94 @@ export function VideoUpload({ onVideoUpload }: VideoUploadProps) {
       mediaRecorder.start();
       setIsRecording(true);
     } catch (error) {
-      console.error('Error accessing camera:', error);
-      alert('Could not access camera. Please check permissions.');
+      console.error('Error starting recording:', error);
+      alert('Failed to start recording. Please check camera permissions.');
+    }
+  };
+
+  const convertToMP4 = async (blob: Blob, originalType: string) => {
+    try {
+      console.log('Converting video to MP4...');
+      setIsConverting(true);
+      setConversionProgress('Starting conversion...');
+      
+      // Create video element for conversion
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      video.onloadedmetadata = () => {
+        setConversionProgress('Processing video frames...');
+        // Set canvas size to video dimensions
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Start video playback for frame capture
+        video.currentTime = 0;
+        video.play();
+      };
+      
+      video.onseeked = () => {
+        setConversionProgress('Converting to MP4 format...');
+        // Draw video frame to canvas
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Convert to MP4 using MediaRecorder
+          const stream = canvas.captureStream(30); // 30 FPS
+          const mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'video/mp4'
+          });
+          
+          const chunks: Blob[] = [];
+          mediaRecorder.ondataavailable = (event) => {
+            chunks.push(event.data);
+          };
+          
+          mediaRecorder.onstop = () => {
+            setConversionProgress('Finalizing MP4 file...');
+            const mp4Blob = new Blob(chunks, { type: 'video/mp4' });
+            const fileName = `platinumrx-video-${Date.now()}.mp4`;
+            const file = new File([mp4Blob], fileName, { type: 'video/mp4' });
+            
+            console.log('Video converted to MP4 successfully');
+            setRecordedBlob(mp4Blob);
+            setIsConverting(false);
+            setConversionProgress('');
+            onVideoUpload(file);
+          };
+          
+          // Record for the duration of the original video
+          mediaRecorder.start();
+          setTimeout(() => {
+            mediaRecorder.stop();
+            video.pause();
+          }, 5000); // Record for 5 seconds (adjust as needed)
+        }
+      };
+      
+      video.onerror = () => {
+        console.error('Video conversion failed');
+        setIsConverting(false);
+        setConversionProgress('');
+        // Fallback to original format
+        const fileName = `platinumrx-video-${Date.now()}.webm`;
+        const file = new File([blob], fileName, { type: originalType });
+        setRecordedBlob(blob);
+        onVideoUpload(file);
+      };
+      
+      // Load video blob
+      video.src = URL.createObjectURL(blob);
+    } catch (error) {
+      console.error('Error converting video:', error);
+      setIsConverting(false);
+      setConversionProgress('');
+      // Fallback to original format
+      const fileName = `platinumrx-video-${Date.now()}.webm`;
+      const file = new File([blob], fileName, { type: originalType });
+      setRecordedBlob(blob);
+      onVideoUpload(file);
     }
   };
 
@@ -194,30 +314,71 @@ export function VideoUpload({ onVideoUpload }: VideoUploadProps) {
       {recordedBlob && (
         <Card className="shadow-medium">
           <CardHeader>
-            <CardTitle>Recorded Video Preview</CardTitle>
+            <CardTitle className="flex items-center">
+              <Video className="w-5 h-5 mr-2" />
+              Recorded Video Preview
+            </CardTitle>
             <CardDescription>
-              Review your recording and use it, or record again
+              {isConverting ? (
+                <div className="flex items-center space-x-2 text-amber-600">
+                  <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                  <span>{conversionProgress}</span>
+                </div>
+              ) : (
+                'Review your recorded video before proceeding'
+              )}
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-center space-y-4">
+          <CardContent className="space-y-4">
             <video 
+              src={URL.createObjectURL(recordedBlob)}
               controls 
-              className="w-full max-w-md mx-auto rounded-lg"
+              className="w-full rounded-lg"
               style={{ aspectRatio: '16/9' }}
-            >
-              <source src={URL.createObjectURL(recordedBlob)} type="video/webm" />
-            </video>
-            <div className="flex justify-center space-x-4">
-              <Button onClick={useRecordedVideo} className="bg-gradient-success">
-                <Video className="w-4 h-4 mr-2" />
-                Use This Video
+            />
+            
+            <div className="p-3 bg-gradient-card rounded-lg">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Format:</span>
+                <span className="font-medium">
+                  {isConverting ? 'Converting to MP4...' : 
+                   recordedBlob.type.includes('mp4') ? 'MP4 (Ready for sharing)' : 
+                   recordedBlob.type.includes('webm') ? 'WebM (Converting to MP4)' : 
+                   recordedBlob.type}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm mt-1">
+                <span className="text-muted-foreground">Size:</span>
+                <span className="font-medium">{(recordedBlob.size / (1024 * 1024)).toFixed(1)}MB</span>
+              </div>
+            </div>
+            
+            <div className="flex space-x-2">
+              <Button 
+                onClick={useRecordedVideo}
+                className="flex-1"
+                disabled={isConverting}
+              >
+                {isConverting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2" />
+                    Converting...
+                  </>
+                ) : (
+                  <>
+                    <Video className="w-4 h-4 mr-2" />
+                    Use This Video
+                  </>
+                )}
               </Button>
               <Button 
-                variant="outline" 
+                variant="outline"
                 onClick={() => {
                   setRecordedBlob(null);
-                  setIsRecording(false);
+                  setIsConverting(false);
+                  setConversionProgress('');
                 }}
+                disabled={isConverting}
               >
                 Record Again
               </Button>

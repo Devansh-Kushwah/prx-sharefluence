@@ -37,53 +37,11 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
 
   const socialPlatforms = [
     {
-      name: 'WhatsApp Video',
-      icon: '📱',
-      color: 'bg-green-500',
-      description: 'Share video file to WhatsApp',
-      shareType: 'whatsapp-video'
-    },
-    {
-      name: 'Instagram Stories',
-      icon: '📷',
-      color: 'bg-gradient-to-r from-purple-500 to-pink-500',
-      description: 'Post to Instagram Stories',
-      shareType: 'instagram'
-    },
-    {
-      name: 'Facebook',
-      icon: '👥',
-      color: 'bg-blue-600',
-      description: 'Share to Facebook',
-      shareType: 'facebook'
-    },
-    {
-      name: 'Twitter',
-      icon: '🐦',
-      color: 'bg-blue-400',
-      description: 'Tweet video',
-      shareType: 'twitter'
-    },
-    {
-      name: 'YouTube Shorts',
-      icon: '🎬',
-      color: 'bg-red-600',
-      description: 'Upload as Short',
-      shareType: 'youtube'
-    },
-    {
-      name: 'LinkedIn',
-      icon: '💼',
-      color: 'bg-blue-700',
-      description: 'Professional share',
-      shareType: 'linkedin'
-    },
-    {
-      name: 'All Platforms',
-      icon: '⋯',
-      color: 'bg-gray-500',
-      description: 'Native sharing (WhatsApp, etc.)',
-      shareType: 'native'
+      name: 'Share Video',
+      icon: '📤',
+      color: 'bg-gradient-to-r from-primary to-accent',
+      description: 'Share to WhatsApp, Instagram, Facebook & more',
+      shareType: 'universal'
     }
   ];
 
@@ -125,16 +83,8 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
     setIsSharing(true);
 
     try {
-      if (shareType === 'whatsapp-video') {
-        // Special handling for WhatsApp video sharing
-        await handleWhatsAppVideoShare();
-      } else if (shareType === 'native') {
-        // Use native Web Share API (works on mobile for WhatsApp, etc.)
-        await handleNativeShare();
-      } else {
-        // Handle specific platform sharing
-        await handlePlatformShare(shareType);
-      }
+      // Universal sharing that works on all platforms
+      await handleUniversalShare();
     } catch (error) {
       console.error('Sharing failed:', error);
       toast.error('Sharing failed. Please try again.');
@@ -143,8 +93,8 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
     }
   };
 
-  const handleWhatsAppVideoShare = async () => {
-    // Try native sharing first (best for mobile)
+  const handleUniversalShare = async () => {
+    // Try native sharing first (best for mobile - WhatsApp, Instagram, etc.)
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [videoFile] })) {
       try {
         const shareData = {
@@ -153,56 +103,18 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
           files: [videoFile]
         };
         
-        console.log('Sharing video to WhatsApp via native API:', shareData);
-        await navigator.share(shareData);
-        toast.success('Video shared to WhatsApp successfully!');
-      } catch (error) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Native WhatsApp sharing failed:', error);
-          // Fallback to download method
-          await handleAlternativeSharing();
-        }
-      }
-    } else {
-      // Fallback: download video and guide user to share manually
-      await handleAlternativeSharing();
-    }
-  };
-
-  const handleNativeShare = async () => {
-    if (navigator.share && navigator.canShare) {
-      try {
-        // Create a File object that can be shared
-        const shareData: any = {
-          title: 'PlatinumRx Unboxing Video',
-          text: shareMessage
-        };
-
-        // Always try to share the video file first
-        if (videoFile && navigator.canShare({ files: [videoFile] })) {
-          shareData.files = [videoFile];
-          console.log('Sharing video file:', videoFile.name, 'Size:', videoFile.size);
-          
-          // Remove URL when sharing files to avoid conflicts
-          delete shareData.url;
-        } else if (videoUrl) {
-          // Fallback to URL if file sharing not supported
-          shareData.url = videoUrl;
-          console.log('File sharing not supported, sharing URL instead');
-        }
-
-        console.log('Share data:', shareData);
+        console.log('Sharing video via native API:', shareData);
         await navigator.share(shareData);
         toast.success('Video shared successfully!');
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
           console.error('Native sharing failed:', error);
-          // Try alternative sharing methods
+          // Fallback to alternative methods
           await handleAlternativeSharing();
         }
       }
     } else {
-      // Fallback for desktop - try alternative methods
+      // Fallback for desktop or unsupported browsers
       await handleAlternativeSharing();
     }
   };
@@ -228,31 +140,14 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
         // Clean up blob URL
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         
-        toast.success('Video downloaded! You can now share it manually to WhatsApp.');
-        toast.info('Tip: Open WhatsApp → Tap + → Document → Select the downloaded video');
+        toast.success('Video downloaded! You can now share it manually.');
+        toast.info('Tip: Open any app (WhatsApp, Instagram, etc.) → Upload the downloaded video');
       } catch (error) {
         console.error('Alternative sharing failed:', error);
         handleFallbackShare();
       }
     } else {
       handleFallbackShare();
-    }
-  };
-
-  const handlePlatformShare = async (platform: string) => {
-    const platformUrls: { [key: string]: string } = {
-      instagram: 'https://www.instagram.com/stories/',
-      facebook: 'https://www.facebook.com/sharer/sharer.php',
-      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareMessage)}`,
-      youtube: 'https://www.youtube.com/shorts/upload',
-      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`
-    };
-
-    const url = platformUrls[platform];
-    if (url) {
-      // Open platform in new tab
-      window.open(url, '_blank');
-      toast.success(`Opened ${platform} for sharing!`);
     }
   };
 
@@ -417,45 +312,44 @@ export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother 
       {/* Share Options */}
       <Card className="shadow-medium">
         <CardHeader>
-          <CardTitle className="flex items-center">
+          <CardTitle className="flex items-center justify-center">
             <Share2 className="w-5 h-5 mr-2" />
             Share Your Video
           </CardTitle>
-          <CardDescription>
-            Choose where to share your video and reach more people
+          <CardDescription className="text-center">
+            Share your video to any platform - WhatsApp, Instagram, Facebook, and more
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="flex justify-center">
             {socialPlatforms.map((platform) => (
               <Card 
                 key={platform.name}
-                className="cursor-pointer hover:shadow-soft transition-all hover:scale-105"
+                className="cursor-pointer hover:shadow-soft transition-all hover:scale-105 max-w-sm"
                 onClick={() => handleShare(platform.name, platform.shareType)}
               >
-                <CardContent className="p-4 text-center">
-                  <div className={`w-12 h-12 ${platform.color} rounded-full flex items-center justify-center mx-auto mb-3 text-white text-xl`}>
+                <CardContent className="p-6 text-center">
+                  <div className={`w-16 h-16 ${platform.color} rounded-full flex items-center justify-center mx-auto mb-4 text-white text-2xl`}>
                     {platform.icon}
                   </div>
-                  <h4 className="font-semibold mb-1">{platform.name}</h4>
-                  <p className="text-xs text-muted-foreground">
+                  <h4 className="text-lg font-semibold mb-2">{platform.name}</h4>
+                  <p className="text-sm text-muted-foreground mb-4">
                     {platform.description}
                   </p>
                   <Button 
-                    size="sm" 
-                    variant="outline" 
-                    className="mt-3 w-full"
+                    size="lg" 
+                    className="w-full bg-gradient-primary hover:bg-gradient-primary/90 text-primary-foreground"
                     disabled={isSharing}
                   >
                     {isSharing ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2" />
+                        <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mr-2" />
                         Sharing...
                       </>
                     ) : (
                       <>
-                        <Share2 className="w-3 h-3 mr-2" />
-                        Share
+                        <Share2 className="w-5 h-5 mr-2" />
+                        Share Now
                       </>
                     )}
                   </Button>
