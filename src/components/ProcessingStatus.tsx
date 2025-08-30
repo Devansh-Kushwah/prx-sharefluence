@@ -17,9 +17,10 @@ import {
 interface ProcessingStatusProps {
   progress: number;
   template: string;
+  videoFile: File | null;
 }
 
-export function ProcessingStatus({ progress, template }: ProcessingStatusProps) {
+export function ProcessingStatus({ progress, template, videoFile }: ProcessingStatusProps) {
   const [currentStep, setCurrentStep] = useState('');
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
 
@@ -211,8 +212,31 @@ export function ProcessingStatus({ progress, template }: ProcessingStatusProps) 
         </CardContent>
       </Card>
 
-      {/* Estimated Time */}
-      <Card className="bg-gradient-card shadow-soft border-0">
+      {/* Video Preview During Processing */}
+      {videoFile && (
+        <Card className="shadow-medium">
+          <CardHeader>
+            <CardTitle>Video Preview</CardTitle>
+            <CardDescription>Your original video being processed</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <video 
+              controls 
+              className="w-full max-w-md mx-auto rounded-lg"
+              style={{ aspectRatio: '16/9' }}
+            >
+              <source src={URL.createObjectURL(videoFile)} type={videoFile.type} />
+              Your browser does not support the video tag.
+            </video>
+            <p className="text-center text-sm text-muted-foreground mt-2">
+              {videoFile.name} • {(videoFile.size / (1024 * 1024)).toFixed(1)}MB
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* AI Disclosure */}
+      <Card className="bg-gradient-card shadow-soft border-accent/20">
         <CardContent className="p-6 text-center">
           <div className="flex items-center justify-center space-x-4">
             <Cpu className="w-6 h-6 text-primary" />

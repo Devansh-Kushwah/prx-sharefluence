@@ -21,11 +21,12 @@ import { toast } from 'sonner';
 interface ShareInterfaceProps {
   earnings: number;
   videoFile: File | null;
+  videoUrl: string;
+  onCreateAnother: () => void;
 }
 
-export function ShareInterface({ earnings, videoFile }: ShareInterfaceProps) {
+export function ShareInterface({ earnings, videoFile, videoUrl, onCreateAnother }: ShareInterfaceProps) {
   const [referralCode] = useState(`PRX${Math.random().toString(36).substr(2, 6).toUpperCase()}`);
-  const [videoUrl] = useState(`https://videos.platinumrx.com/ugc/${Date.now()}.mp4`);
   const [isSharing, setIsSharing] = useState(false);
 
   const socialPlatforms = [
@@ -73,13 +74,27 @@ export function ShareInterface({ earnings, videoFile }: ShareInterfaceProps) {
   };
 
   const handleCopyVideoUrl = () => {
-    navigator.clipboard.writeText(videoUrl);
-    toast.success('Video URL copied to clipboard!');
+    if (videoUrl) {
+      navigator.clipboard.writeText(videoUrl);
+      toast.success('Video URL copied to clipboard!');
+    } else {
+      toast.error('Video URL not available');
+    }
   };
 
   const handleDownload = () => {
-    // Simulate download
-    toast.success('Video downloaded to your device!');
+    if (videoFile && videoUrl) {
+      // Create download link
+      const link = document.createElement('a');
+      link.href = videoUrl;
+      link.download = `platinumrx-${videoFile.name}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success('Video downloaded to your device!');
+    } else {
+      toast.error('Video not available for download');
+    }
   };
 
   const handleShare = (platform: string) => {
@@ -141,15 +156,38 @@ export function ShareInterface({ earnings, videoFile }: ShareInterfaceProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="aspect-video bg-gradient-to-br from-muted to-muted/50 rounded-lg flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Smartphone className="w-8 h-8 text-primary-foreground" />
+            {videoFile && videoUrl ? (
+              <video 
+                controls 
+                className="w-full rounded-lg"
+                style={{ aspectRatio: '16/9' }}
+                poster={videoUrl}
+              >
+                <source src={videoUrl} type={videoFile.type} />
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <div className="aspect-video bg-gradient-to-br from-muted to-muted/50 rounded-lg flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Smartphone className="w-8 h-8 text-primary-foreground" />
+                  </div>
+                  <p className="font-medium">Enhanced Video Preview</p>
+                  <p className="text-sm text-muted-foreground">
+                    {videoFile?.name || 'Your unboxing video'}
+                  </p>
                 </div>
-                <p className="font-medium">Enhanced Video Preview</p>
-                <p className="text-sm text-muted-foreground">
-                  {videoFile?.name || 'Your unboxing video'}
-                </p>
+              </div>
+            )}
+            
+            <div className="mt-4 p-3 bg-gradient-card rounded-lg">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">File:</span>
+                <span className="font-medium">{videoFile?.name}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm mt-1">
+                <span className="text-muted-foreground">Size:</span>
+                <span className="font-medium">{videoFile ? (videoFile.size / (1024 * 1024)).toFixed(1) : 0}MB</span>
               </div>
             </div>
             
@@ -300,7 +338,10 @@ export function ShareInterface({ earnings, videoFile }: ShareInterfaceProps) {
               <p className="text-muted-foreground mb-4">
                 Create more videos with your next orders and maximize your earnings
               </p>
-              <Button className="bg-gradient-primary">
+              <Button 
+                className="bg-gradient-primary"
+                onClick={onCreateAnother}
+              >
                 Create Another Video
               </Button>
             </div>

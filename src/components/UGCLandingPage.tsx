@@ -30,6 +30,7 @@ type Step = 'welcome' | 'upload' | 'template' | 'processing' | 'complete';
 export default function UGCLandingPage() {
   const [currentStep, setCurrentStep] = useState<Step>('welcome');
   const [uploadedVideo, setUploadedVideo] = useState<File | null>(null);
+  const [processedVideoUrl, setProcessedVideoUrl] = useState<string>('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [processingProgress, setProcessingProgress] = useState(0);
   const [earnings, setEarnings] = useState(0);
@@ -42,6 +43,12 @@ export default function UGCLandingPage() {
   const handleTemplateSelect = (template: string) => {
     setSelectedTemplate(template);
     setCurrentStep('processing');
+    
+    // Create a URL for the uploaded video for preview
+    if (uploadedVideo) {
+      const videoUrl = URL.createObjectURL(uploadedVideo);
+      setProcessedVideoUrl(videoUrl);
+    }
     
     // Simulate processing
     const interval = setInterval(() => {
@@ -57,6 +64,16 @@ export default function UGCLandingPage() {
     }, 500);
   };
 
+  const handleCreateAnother = () => {
+    // Reset all state
+    setCurrentStep('welcome');
+    setUploadedVideo(null);
+    setProcessedVideoUrl('');
+    setSelectedTemplate('');
+    setProcessingProgress(0);
+    // Keep earnings accumulated
+  };
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 'welcome':
@@ -66,9 +83,9 @@ export default function UGCLandingPage() {
       case 'template':
         return <TemplateSelection onTemplateSelect={handleTemplateSelect} />;
       case 'processing':
-        return <ProcessingStatus progress={processingProgress} template={selectedTemplate} />;
+        return <ProcessingStatus progress={processingProgress} template={selectedTemplate} videoFile={uploadedVideo} />;
       case 'complete':
-        return <ShareInterface earnings={earnings} videoFile={uploadedVideo} />;
+        return <ShareInterface earnings={earnings} videoFile={uploadedVideo} videoUrl={processedVideoUrl} onCreateAnother={handleCreateAnother} />;
       default:
         return <WelcomeSection onGetStarted={() => setCurrentStep('upload')} />;
     }
